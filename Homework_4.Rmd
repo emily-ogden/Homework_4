@@ -1,0 +1,137 @@
+---
+title: "Homework_4"
+author: "Emily Ogden"
+date: "February 25, 2020"
+output: html_document
+---
+```{R Read data}
+boat=read.csv("titanic.csv")
+```
+  
+2.  
+Variable | Justification | Hypotheses
+---------|---------------|------------
+Gender   | Woman were prioritized over men when filling the life boats | $H_{A}:\beta_{1}\ne0$ $H_{0}:\beta_{1}=0$
+age      | Children were prioritized over adults when filling the life boats | $H_{A}:\beta_{2}\ne0$ $H_{0}:\beta_{2}=0$
+Residence| The Titanic was built in Great Britain so they might of prioritized their citizens over Americans | $H_{A}:\beta_{3}\ne0$ $H_{0}:\beta_{3}=0$
+fare     | Those that paid more for their ticket were most likely in a higher class and were prioritized over lower class passengers | $H_{A}:\beta_{4}\ne0$ $H_{0}:\beta_{4}=0$
+parch    | If the adult had children on board they might of let them into the life boat with their children | $H_{A}:\beta_{5}\ne0$ $H_{0}:\beta_{5}=0$
+  
+3.  
+```{r Plots, message=FALSE}
+library(popbio)
+age.nona<-na.omit(data.frame("age"=boat$age,"survived"=boat$survived))
+logi.hist.plot(age.nona$age,age.nona$survived,boxp=FALSE,type="hist",col="gray", xlabel="Age")
+fare.nona<-na.omit(data.frame("fare"=boat$fare,"survived"=boat$survived))
+logi.hist.plot(fare.nona$fare,fare.nona$survived,boxp=FALSE,type="hist",col="gray", xlabel="fare")
+parch.nona<-na.omit(data.frame("parch"=boat$parch,"survived"=boat$survived))
+logi.hist.plot(parch.nona$parch,parch.nona$survived,boxp=FALSE,type="hist",col="gray", xlabel="parch")
+
+library(vcd)
+mosaic(survived~Gender, data=boat)
+mosaic(survived~Residence, data=boat)
+```
+  
+4.  
+```{r Model selection, message=FALSE}
+library(bestglm)
+library(dplyr)
+my.variables=data.frame("age"=boat$age,"fare"=boat$fare,"parch"=boat$parch,"Gender"=boat$Gender,"Residence"=boat$Residence,"survived"=boat$survived) %>% 
+na.omit(my.variables)
+
+bestglm(my.variables,IC="AIC",family=binomial)
+
+```
+  
+5.  
+```{r running the model}
+mod1=glm(survived~age+fare+parch+Gender+Residence, data=my.variables,family = binomial(link="logit"))
+summary.lm(mod1)
+```
+  
+6.  
+```{r univariate}
+univariate.age=glm(survived~age, data=my.variables, family=binomial(link="logit"))
+summary(univariate.age)
+univariate.fare=glm(survived~fare, data=my.variables, family=binomial(link="logit"))
+summary(univariate.fare)
+univariate.parch=glm(survived~parch, data=my.variables, family=binomial(link="logit"))
+summary(univariate.parch)
+univariate.Gender=glm(survived~Gender, data=my.variables, family=binomial(link="logit"))
+summary(univariate.Gender)
+univariate.Residence=glm(survived~Residence, data=my.variables, family=binomial(link="logit"))
+summary(univariate.Residence)
+```
+```{r purposeful model selection}
+mod2<-glm(survived~age+fare+parch+Gender+Residence,data=my.variables, family=binomial(link="logit"))
+summary(mod2)
+```
+```{r reduced model}
+mod3=glm(survived~age+fare+Gender+Residence, data=my.variables, family = binomial(link="logit"))
+summary(mod3)
+```
+```{r comparing models, message=FALSE}
+library(lmtest)
+lrtest(mod2,mod3)
+```
+  
+7. Model 3 is not significantlt better than model 2, which is the same as model 1 from the automatic selection. Therefore, the puroposeful selection did not produced a model that is significantly different than the automatic selection.
+  
+8.  
+
+```{r effects, message=FALSE}
+library(effects)
+plot(allEffects(mod1))
+```
+  
+All of the effects were in the direction that I anticipated except for Residence and parch. Being an American resident seems to have positively impacted your survival rate when compares to the British residents, and survival seems to be negatively impacted by increases in the number of parents or children also abord the ship.
+  
+9.  
+```{r residuals, message=FALSE}
+library(car)
+residualPlots(mod1)
+```
+```{r outlier}
+outlierTest(mod1)
+```
+```{r influence index, message=FALSE, warning=FALSE}
+influenceIndexPlot(mod1, id.n=3)
+```
+```{r influence}
+influencePlot(mod1)
+```
+```{r}
+vif(mod1)
+```
+  
+10.  
+There is no trend between the Pearson redisuals and each variable, and each variable appears linear. The results from the outlier test show no outliers as judged by the Bonferonni p. The results from the influence index show that observations 414 and 471 have the largest hat values and observation 1161 is most likely to be an outlier, but all Bonferonni P values are close to 1. Based on the plot of the studentized residuals, hat values, and Cook's distances, obervation 471 has the largest Cook's distance and hat values. Overall, the regression diagnostics look good.  
+
+11.  
+
+```{r k-fold, message=FALSE}
+library(caret)
+ctrl <- trainControl(method = "repeatedcv", number = 10, savePredictions = TRUE)
+my.variables$survived=as.factor(my.variables$survived)
+train(survived~.,data=my.variables, method="glm", family=binomial(link='logit'),
+                 trControl = ctrl, tuneLength = 5)
+
+```
+  
+12.  
+The model was able to correctly classify the data 77.6% of the time. This suggests that the model is a decent predictor of survival.  
+
+13.  
+
+```{r confusion matrix}
+predictions<-predict(mod1,newdata= my.variables, type="response", family = binomial(link="logit"))
+pred=ifelse(predictions>0.5, 1, 0)
+pred=as.factor(pred)
+confusionMatrix(data=pred,reference=my.variables$survived)
+
+```
+  
+The accuracy of the model according to the confusion matrix is 77.8%.  
+
+14.  
+There is a slight difference between the k-fold cross validation and the confusion matrix because the k-fold cross validation uses a subset of the data set to validate the model, while the confusion matrix validates the model with data predicted by the model. 
